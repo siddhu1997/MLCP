@@ -1,0 +1,66 @@
+# context_packet.yaml
+
+context_packet:
+  id: "ctx-<uuid>"
+  timestamp: "<ISO8601 UTC timestamp>"
+  source_agent_id: "<agent-id>"
+  target_agent_id: "<agent-id>"
+  task_id: "<task-uuid>"
+
+  global:
+    protocol_version: "0.1.0"
+    org_guidelines:
+      - "respect token budget"
+      - "log reasoning path"
+    values: ["collaborative", "autonomous", "budget-aware"]
+    features_enabled: ["temporal_layer", "telemetry", "recruitment"]
+
+  task:
+    title: "Implement Search Component"
+    description: "A filterable, accessible search UI using React"
+    sprint_id: "sprint-12"
+    priority: "high"
+    status: "open"
+    metadata:
+      estimated_tokens: 7000
+      requires: ["React", "UX Design"]
+
+  agent:
+    agent_id: "agent-12"
+    role_category: "Developer"
+    skill_profile:
+      - name: "React"
+        rating: 4
+      - name: "Tailwind"
+        rating: 3
+    model_info:
+      model_name: "gpt-4o"
+      max_context_window: 128000
+    memory_id: "agent-12-memory"
+
+  operational:
+    token_budget: 10000
+    current_usage: 1200
+    execution_timeout_sec: 180
+    retry_limit: 2
+    task_scope: "frontend:search"
+
+  temporal:
+    previous_context_ids: ["ctx-xyz", "ctx-abc"]
+    acceptance_criteria:
+      - "Debounce input field"
+      - "Include loading shimmer for network calls"
+    forecast:
+      next_action_due_by: "2025-08-03T14:00:00Z"
+
+  security:
+    access_scope:
+      read: ["ProductOwner", "ScrumMaster"]
+      write: ["Developer"]
+    redact_fields:
+      - "task.priority"
+
+  telemetry:
+    last_latency_ms: 320
+    last_cost_usd: 0.048
+    outcome_rating: 4

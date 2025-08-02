@@ -1,0 +1,56 @@
+# mlcp.yaml
+
+mlcp:
+  version: "0.1.0"
+  mode: "hybrid"
+
+  enabled_layers:
+    global: true
+    task: true
+    agent: true
+    operational: true
+    temporal: true
+    security: true
+    testing: false  # Can be toggled based on project budget or phase
+
+  agent_roles:
+    ProductOwner:
+      max_instances: 1
+      default_budget_tokens: 10000
+    Developer:
+      max_instances: 5
+      default_budget_tokens: 8000
+    Tester:
+      max_instances: 2
+      default_budget_tokens: 4000
+    ScrumMaster:
+      max_instances: 1
+      default_budget_tokens: 6000
+    Security:
+      max_instances: 1
+      default_budget_tokens: 3000
+
+  defaults:
+    max_retry: 2
+    default_token_budget: 5000
+    execution_timeout_sec: 180
+    serialization_format: "json"
+
+  telemetry:
+    enabled: true
+    sample_rate: 1.0   # 100% for now
+    log_fields: ["token_usage", "latency", "outcome_score"]
+
+  temporal:
+    enabled: true
+    forecasting: true
+    retain_days: 30
+
+  human_in_loop:
+    enabled: true
+    approval_required_roles: ["ProductOwner", "ScrumMaster"]
+
+  budget_overrides:
+    bootstrap_mode:
+      disable_layers: ["testing", "security"]
+      token_ceiling: 10000
