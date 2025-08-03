@@ -1,8 +1,6 @@
 name: "CodeQL Advanced"
 
 on:
-  push:
-    branches: [ "**" ]  # All branches
   pull_request:
     branches: [ "**" ]  # All branches
 
@@ -19,15 +17,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [go, python, javascript-typescript]
+        language: [python]
         include:
-          - language: go
-            build-mode: autobuild
           - language: python
             build-mode: autobuild
-          - language: javascript-typescript
-            build-mode: autobuild
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
