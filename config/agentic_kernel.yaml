@@ -1,0 +1,119 @@
+# ========================================================
+# agentic-kernel.yaml (DRAFT)
+# --------------------------------------------------------
+# ⚠️ This is a working draft configuration.
+#    Subject to change as MLCP architecture evolves.
+#    Do not rely on this for production use.
+# ========================================================
+
+kernel:
+  version: 0.1
+  description: >
+    Agentic Kernel config file defining syscall permissions, access controls,
+    and collaborative protocols for MLCP agents.
+
+agent_roles:
+  Developer:
+    can_spawn: false
+    allowed_syscalls:
+      - read
+      - write
+      - readContext
+      - sendEvent
+      - openPullRequest
+      - pushPRUpdate
+      - queryPullRequests
+      - sendMessage
+    permitted_layers:
+      read: [task, agentic]
+      write: [agentic]
+    file_access:
+      read: ["./**"]
+      write: ["./**"]
+    web_access:
+      domains: []
+      rate_limit: 10 per minute
+    pull_request:
+      can_open: true
+      can_review: false
+      auto_merge: false
+
+  Architect:
+    can_spawn: false
+    allowed_syscalls:
+      - reviewPullRequest
+      - readContext
+      - sendEvent
+    permitted_layers:
+      read: [task, agentic]
+      write: []
+    pull_request:
+      can_open: false
+      can_review: true
+      auto_merge: false
+
+  ProductOwner:
+    can_spawn: true
+    allowed_syscalls:
+      - spawn
+      - updateContext
+      - readContext
+      - sendEvent
+    permitted_layers:
+      read: [global, task, temporal]
+      write: [task, agentic]
+    pull_request:
+      can_open: false
+      can_review: false
+      auto_merge: false
+
+  Kernel:
+    can_spawn: true
+    allowed_syscalls:
+      - mergePullRequest
+      - kill
+      - commit
+      - reserve
+      - suggestPaths
+      - raiseMergeConflict
+      - fetch
+    file_access:
+      read: ["/**"]
+      write: ["/**"]
+    web_access:
+      domains: ["*"]
+      rate_limit: unlimited
+    pull_request:
+      can_open: false
+      can_review: false
+      auto_merge: true
+
+syscall_policies:
+  fetch:
+    default_domains:
+      - "openai.com"
+      - "huggingface.co"
+    allow_dynamic: false
+    escalation_required: true
+  read:
+    restrict_outside_pwd: true
+  write:
+    restrict_outside_pwd: true
+
+collaboration:
+  enable_soft_locks: true
+  use_diff_patch: true
+  pr_required_for_merge: true
+  human_review_roles:
+    - Architect
+    - Reviewer
+  side_channel_comms: true
+
+logging:
+  telemetry_hooks:
+    - syscall_usage
+    - pr_events
+    - file_conflicts
+    - web_access
+  retention_days: 30
+

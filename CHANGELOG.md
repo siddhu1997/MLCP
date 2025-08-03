@@ -19,4 +19,5 @@
 - [ ] Add OpenAPI or gRPC interfaces
 - [ ] Write test harness for simulating agent sprints
 - [ ] Support plugin agents (external tools, LangChain, etc.)
+- [ ] Build the [Agentic Kernel](./docs/agentic_kernel.md)
 - [ ] Launch MLCP v0.2.0 with working prototype
