@@ -6,6 +6,8 @@ from starlette import status
 from mlcp.common.logger import get_logger
 
 from .routes import runs_router
+from .routes import plan as plan_router
+
 
 
 _LOG = get_logger(__name__)
@@ -14,6 +16,8 @@ def create_app() -> FastAPI:
     app = FastAPI(title="MLCP API", version="0.0.1")
 
     app.include_router(runs_router)
+    app.include_router(plan_router.router)
+
 
     @app.get("/health", status_code=status.HTTP_200_OK)
     def health() -> dict[str, str]:                     # type: ignore[unused-function]

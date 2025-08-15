@@ -226,3 +226,6 @@ __marimo__/
 #workspace
 workspace/
 .DS_Store
+
+# bash scripts for tests
+*.sh
