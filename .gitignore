@@ -24,6 +24,17 @@ share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+__pycache__/
+*.pyc
+.venv/
+.env
+# tooling
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+# local data
+workspace/
+*.db
 MANIFEST
 
 # PyInstaller
@@ -205,3 +216,13 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+#vscode
+.vscode/
+
+#env
+.env.*
+
+#workspace
+workspace/
+.DS_Store

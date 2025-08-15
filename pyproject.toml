@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mlcp"
+version = "0.0.1"
+description = "Multi-Layered Context Protocol"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Siddharth S", email = "siddharthajith97@gmail.com" }]
+
+dependencies = [
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.27",
+  "pydantic>=2.6",
+  "structlog>=24.1",
+  "python-json-logger>=2.0",
+  "typer>=0.12",
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.5",         # formatter/linter (PEP8+)
+  "mypy>=1.10",
+  "pytest>=8.2",
+  "httpx>=0.27",
+  "anyio>=4.4",
+  "types-python-dateutil",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["mlcp*"]
+
+[tool.setuptools.package-data]
+mlcp = ["py.typed"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_ignores = true
+ignore_missing_imports = true
