@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from fastapi import FastAPI
 from starlette import status
 
@@ -28,3 +29,13 @@ def create_app() -> FastAPI:
 
 # For `uvicorn mlcp.api.main:app --reload`
 app = create_app()
+
+def run_server() -> None:
+    """Run the FastAPI server with configurable port."""
+    import uvicorn
+    
+    port = int(os.getenv("MLCP_API_LAYER_APP_PORT", "8081"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
+
+if __name__ == "__main__":
+    run_server()
