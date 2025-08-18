@@ -110,6 +110,75 @@ def _ensure_node_exists(conn: Connection, run_id: str, version: int, node_id: st
     if row is None:
         raise HTTPException(status_code=404, detail="node_not_found")
 
+def _compute_ready(conn: Connection, run_id: str, plan_version: int) -> list[str]:
+    """
+    READY iff:
+      - node not marked complete/failed in run_tasks
+      - every direct predecessor (edge.src where edge.dst==node) is complete
+    Notes:
+      - gates_json is intentionally ignored (matches current E2E/frontier).
+      - run_tasks may not have 'pending' rows; we only look for 'complete' / 'failed'.
+    """
+    # 1) All node ids for this plan version
+    node_rows = conn.execute(
+        """
+        SELECT node_id
+        FROM plan_nodes
+        WHERE run_id = ? AND plan_version = ?
+        ORDER BY rowid
+        """,
+        (run_id, plan_version),
+    ).fetchall()
+    all_nodes: list[str] = [str(r["node_id"]) for r in node_rows]
+
+    # 2) Build dependency map: dst -> {src,...}
+    edge_rows = conn.execute(
+        """
+        SELECT src, dst
+        FROM plan_edges
+        WHERE run_id = ? AND plan_version = ?
+        """,
+        (run_id, plan_version),
+    ).fetchall()
+    deps_by_dst: dict[str, set[str]] = {n: set() for n in all_nodes}
+    for e in edge_rows:
+        s = str(e["src"]); d = str(e["dst"])
+        # keep only deps that point to known nodes (defensive)
+        if d in deps_by_dst:
+            deps_by_dst[d].add(s)
+
+    # 3) Task states (done/failed)
+    done = {
+        str(r["node_id"])
+        for r in conn.execute(
+            """
+            SELECT node_id FROM run_tasks
+            WHERE run_id = ? AND plan_version = ? AND status = 'complete'
+            """,
+            (run_id, plan_version),
+        ).fetchall()
+    }
+    failed = {
+        str(r["node_id"])
+        for r in conn.execute(
+            """
+            SELECT node_id FROM run_tasks
+            WHERE run_id = ? AND plan_version = ? AND status = 'failed'
+            """,
+            (run_id, plan_version),
+        ).fetchall()
+    }
+
+    # 4) READY = not done/failed and all deps in done
+    ready: list[str] = []
+    for nid in all_nodes:  # preserve plan order
+        if nid in done or nid in failed:
+            continue
+        deps = deps_by_dst.get(nid, set())
+        if all(d in done for d in deps):
+            ready.append(nid)
+    return ready
+
 def _upsert_task_status(run_id: str, version: int, node_id: str, status_val: str) -> TaskUpdateResponse:
     conn = connect()
     ts = _utcnow()
@@ -168,6 +237,9 @@ def plan_seal(run_id: str, body: PlanSealBody) -> PlanSealResponse:
     version, phash = persist_plan(run_id=run_id, norm=norm, data_root=data_root, raw_text=raw_text)
 
     _append_event(run_id, "plan_sealed", {"version": version, "plan_hash": phash})
+    conn = connect()
+    ready_after_seal = _compute_ready(conn, run_id, version)
+    _append_event(run_id, "frontier_updated", {"version": version, "ready": ready_after_seal})
 
     return PlanSealResponse(
         ok=True,
@@ -382,6 +454,11 @@ def task_complete(run_id: str, node_id: str, version: Optional[int] = Query(defa
     _ensure_node_exists(conn, run_id, ver, node_id)
     result = _upsert_task_status(run_id, ver, node_id, "complete")
     _append_event(run_id, "task_completed", {"node_id": node_id, "version": ver})
+    
+    conn = connect()
+    ready_after_complete = _compute_ready(conn, run_id, ver)
+    _append_event(run_id, "frontier_updated", {"version": ver, "ready": ready_after_complete})
+
     return result
 
 
@@ -393,4 +470,8 @@ def task_fail(run_id: str, node_id: str, version: Optional[int] = Query(default=
     _ensure_node_exists(conn, run_id, ver, node_id)
     result = _upsert_task_status(run_id, ver, node_id, "failed")
     _append_event(run_id, "task_failed", {"node_id": node_id, "version": ver})
+    conn = connect()
+    ready_after_fail = _compute_ready(conn, run_id, ver)
+    _append_event(run_id, "frontier_updated", {"version": ver, "ready": ready_after_fail})
+
     return result
