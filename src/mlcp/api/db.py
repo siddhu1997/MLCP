@@ -126,5 +126,28 @@ def connect() -> sqlite3.Connection:
             "ON run_tasks(run_id, plan_version, status)"
         )
 
+        # events (audit log)
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS run_events (
+              id          INTEGER PRIMARY KEY AUTOINCREMENT,
+              run_id      TEXT NOT NULL,
+              ts          TEXT NOT NULL,   -- ISO8601 UTC (same format as your other timestamps)
+              kind        TEXT NOT NULL,   -- e.g., plan_sealed, task_completed, task_failed
+              details     TEXT NOT NULL,   -- JSON blob
+              FOREIGN KEY (run_id) REFERENCES runs(run_id) ON DELETE CASCADE
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_run_events_run_ts "
+            "ON run_events(run_id, ts)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_run_events_kind "
+            "ON run_events(kind)"
+        )
+
+
     _LOG.info("db_ready", path=str(path))
     return conn

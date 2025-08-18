@@ -54,6 +54,18 @@ class TaskUpdateResponse(BaseModel):
     status: str
     updated_at: str
 
+class EventLogItem(BaseModel):
+    ts: str
+    kind: str
+    details: dict[str, Any] = Field(default_factory=dict)
+
+class PlanStats(BaseModel):
+    nodes: int
+    edges: int
+    per_role: dict[str, int] = Field(default_factory=dict)
+    gated: int
+
+
 @dataclass(frozen=True, slots=True)
 class _NodeMeta:
     role: str
@@ -72,6 +84,17 @@ def _latest_version(run_id: str, conn: Connection) -> int:
     if row is None or int(row["v"]) == 0:
         raise HTTPException(status_code=404, detail="plan_not_found")
     return int(row["v"])
+
+def _append_event(run_id: str, kind: str, details: dict[str, Any]) -> None:
+    ts = _utcnow()
+    payload = json.dumps(details, ensure_ascii=False)
+    conn = connect()
+    with conn:
+        conn.execute(
+            "INSERT INTO run_events(run_id, ts, kind, details) VALUES(?,?,?,?)",
+            (run_id, ts, kind, payload),
+        )
+
 
 def _ensure_run_exists(run_id: str) -> None:
     conn = connect()
@@ -144,6 +167,8 @@ def plan_seal(run_id: str, body: PlanSealBody) -> PlanSealResponse:
 
     version, phash = persist_plan(run_id=run_id, norm=norm, data_root=data_root, raw_text=raw_text)
 
+    _append_event(run_id, "plan_sealed", {"version": version, "plan_hash": phash})
+
     return PlanSealResponse(
         ok=True,
         run_id=run_id,
@@ -192,6 +217,43 @@ def get_plan_norm_json(run_id: str, version: Optional[int] = Query(default=None)
         raise HTTPException(status_code=404, detail="plan_not_found")
     body_json = str(row["body_json"])
     return Response(content=body_json, media_type="application/json")
+
+@router.get("/{run_id}/plan:stats", response_model=PlanStats)
+def plan_stats(
+    run_id: str,
+    version: Optional[int] = Query(default=None, description="If omitted, latest version is used")
+) -> PlanStats:
+    _ensure_run_exists(run_id)
+    conn = connect()
+    ver = _latest_version(run_id, conn) if version is None else int(version)
+
+    # counts
+    nodes = int(conn.execute(
+        "SELECT COUNT(*) AS c FROM plan_nodes WHERE run_id = ? AND plan_version = ?",
+        (run_id, ver)
+    ).fetchone()["c"])
+
+    edges = int(conn.execute(
+        "SELECT COUNT(*) AS c FROM plan_edges WHERE run_id = ? AND plan_version = ?",
+        (run_id, ver)
+    ).fetchone()["c"])
+
+    # per-role
+    role_rows = conn.execute(
+        "SELECT role, COUNT(*) AS c FROM plan_nodes WHERE run_id = ? AND plan_version = ? GROUP BY role",
+        (run_id, ver)
+    ).fetchall()
+    per_role: dict[str, int] = {str(r["role"]): int(r["c"]) for r in role_rows}
+
+    # gated (non-empty gates_json arrays)
+    gated = int(conn.execute(
+        "SELECT COUNT(*) AS c FROM plan_nodes WHERE run_id = ? AND plan_version = ? "
+        "AND gates_json IS NOT NULL AND gates_json != '[]'",
+        (run_id, ver)
+    ).fetchone()["c"])
+
+    return PlanStats(nodes=nodes, edges=edges, per_role=per_role, gated=gated)
+
 
 @router.get("/{run_id}/frontier", response_model=list[FrontierItem])  # type: ignore[unused-function]
 def get_frontier(run_id: str, version: Optional[int] = Query(default=None)) -> list[FrontierItem]:
@@ -271,13 +333,56 @@ def get_frontier(run_id: str, version: Optional[int] = Query(default=None)) -> l
     ready.sort(key=lambda item: item.node_id)
     return ready
 
+@router.get("/{run_id}/events", response_model=list[EventLogItem])
+def get_events(
+    run_id: str,
+    last: int = Query(default=100, ge=1, le=1000),
+    since_ts: Optional[str] = Query(default=None, description="ISO8601 UTC; inclusive lower bound")
+) -> list[EventLogItem]:
+    _ensure_run_exists(run_id)
+    conn = connect()
+    if since_ts:
+        rows = conn.execute(
+            """
+            SELECT ts, kind, details
+            FROM run_events
+            WHERE run_id = ? AND ts >= ?
+            ORDER BY ts DESC
+            LIMIT ?
+            """,
+            (run_id, since_ts, last),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT ts, kind, details
+            FROM run_events
+            WHERE run_id = ?
+            ORDER BY ts DESC
+            LIMIT ?
+            """,
+            (run_id, last),
+        ).fetchall()
+
+    out: list[EventLogItem] = []
+    for r in rows:
+        try:
+            det: dict[str, Any] = json.loads(str(r["details"]))
+        except Exception:
+            det = {}
+        out.append(EventLogItem(ts=str(r["ts"]), kind=str(r["kind"]), details=det))
+    return out
+
+
 @router.post("/{run_id}/tasks/{node_id}:complete", response_model=TaskUpdateResponse)  # type: ignore[unused-function]
 def task_complete(run_id: str, node_id: str, version: Optional[int] = Query(default=None)) -> TaskUpdateResponse:
     _ensure_run_exists(run_id)
     conn = connect()
     ver = _latest_version(run_id, conn) if version is None else int(version)
     _ensure_node_exists(conn, run_id, ver, node_id)
-    return _upsert_task_status(run_id, ver, node_id, "complete")
+    result = _upsert_task_status(run_id, ver, node_id, "complete")
+    _append_event(run_id, "task_completed", {"node_id": node_id, "version": ver})
+    return result
 
 
 @router.post("/{run_id}/tasks/{node_id}:fail", response_model=TaskUpdateResponse)  # type: ignore[unused-function]
@@ -286,4 +391,6 @@ def task_fail(run_id: str, node_id: str, version: Optional[int] = Query(default=
     conn = connect()
     ver = _latest_version(run_id, conn) if version is None else int(version)
     _ensure_node_exists(conn, run_id, ver, node_id)
-    return _upsert_task_status(run_id, ver, node_id, "failed")
+    result = _upsert_task_status(run_id, ver, node_id, "failed")
+    _append_event(run_id, "task_failed", {"node_id": node_id, "version": ver})
+    return result
