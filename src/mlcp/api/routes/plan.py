@@ -16,7 +16,7 @@ class PlanValidateBody(BaseModel):
     plan_text: Optional[str] = Field(default=None, description="YAML or JSON as text")
 
 
-@router.post("/plan:validate", status_code=status.HTTP_200_OK)  # type: ignore[unused-function]
+@router.post("/plan:validate", status_code=status.HTTP_200_OK, summary="Validate a plan doc (structure, refs, cycles)")
 def plan_validate(body: PlanValidateBody) -> dict[str, Any]:
     ok, errors, stats = validate_plan(plan=body.plan, plan_text=body.plan_text)
     if not ok:

@@ -148,6 +148,26 @@ def connect() -> sqlite3.Connection:
             "ON run_events(kind)"
         )
 
+        # additive migration: run_tasks retry columns ---
+        try:
+            conn.execute("ALTER TABLE run_tasks ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0")
+        except sqlite3.OperationalError:
+            _LOG.warning("Column 'retry_count' already exists in 'run_tasks' table")
+            pass
+
+        try:
+            conn.execute("ALTER TABLE run_tasks ADD COLUMN last_error TEXT")
+        except sqlite3.OperationalError:
+            _LOG.warning("Column 'last_error' already exists in 'run_tasks' table")
+            pass
+
+        try:
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_run_tasks_retry "
+                "ON run_tasks(run_id, plan_version, node_id, retry_count)"
+            )
+        except sqlite3.OperationalError:    
+            pass
 
     _LOG.info("db_ready", path=str(path))
     return conn
