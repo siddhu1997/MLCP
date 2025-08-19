@@ -33,22 +33,26 @@ def test_reseal_increments_version_and_changes_hash(client, new_run):
 def test_negative_invalid_edge_and_cycle_422(client, new_run):
     # invalid edge
     run1 = new_run("neg invalid-edge")
-    bad1 = """schema_version: "1"
-nodes:
-  - { id: A, name: "A", role: developer }
-edges:
-  - [A, B]"""
+    bad1 = """
+    schema_version: "1"
+    nodes:
+      - { id: A, name: "A", role: developer }
+    edges:
+      - [A, B]
+    """
     r1 = seal_plan(client, run1, bad1)
     assert r1.status_code == 422
 
     # cycle
     run2 = new_run("neg cycle")
-    bad2 = """schema_version: "1"
-nodes:
-  - { id: A, name: "A", role: developer }
-  - { id: B, name: "B", role: developer }
-edges:
-  - [A, B]
-  - [B, A]"""
+    bad2 = """
+    schema_version: "1"
+    nodes:
+      - { id: A, name: "A", role: developer }
+      - { id: B, name: "B", role: developer }
+    edges:
+      - [A, B]
+      - [B, A]
+    """
     r2 = seal_plan(client, run2, bad2)
     assert r2.status_code == 422

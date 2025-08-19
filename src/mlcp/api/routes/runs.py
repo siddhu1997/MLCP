@@ -297,6 +297,7 @@ def plan_stats(
     run_id: str,
     version: Optional[int] = Query(default=None, description="If omitted, latest version is used")
 ) -> PlanStats:
+    """Return plan statistics: total nodes, edges, per-role counts, and number of gated nodes."""
     conn = connect()
     _ensure_run_exists(conn, run_id)
     ver = _latest_version(run_id, conn) if version is None else int(version)
@@ -412,6 +413,7 @@ def get_events(
     last: int = Query(default=100, ge=1, le=1000),
     since_ts: Optional[str] = Query(default=None, description="ISO8601 UTC; inclusive lower bound")
 ) -> list[EventLogItem]:
+    """ List newest-first event log for a run; supports ?last= and ?since_ts=. Ties resolved by (ts DESC, id DESC). """
     conn = connect()
     _ensure_run_exists(conn, run_id)
     if since_ts:
@@ -420,7 +422,7 @@ def get_events(
             SELECT ts, kind, details
             FROM run_events
             WHERE run_id = ? AND ts >= ?
-            ORDER BY ts DESC
+            ORDER BY ts DESC, id DESC
             LIMIT ?
             """,
             (run_id, since_ts, last),
@@ -431,7 +433,7 @@ def get_events(
             SELECT ts, kind, details
             FROM run_events
             WHERE run_id = ?
-            ORDER BY ts DESC
+            ORDER BY ts DESC, id DESC
             LIMIT ?
             """,
             (run_id, last),
@@ -447,7 +449,7 @@ def get_events(
     return out
 
 
-@router.post("/{run_id}/tasks/{node_id}:complete", response_model=TaskUpdateResponse)
+@router.post("/{run_id}/tasks/{node_id}:complete", response_model=TaskUpdateResponse, summary="Mark a task as completed")
 def task_complete(run_id: str, node_id: str, version: Optional[int] = Query(default=None)) -> TaskUpdateResponse:
     conn = connect()
     _ensure_run_exists(conn, run_id)
